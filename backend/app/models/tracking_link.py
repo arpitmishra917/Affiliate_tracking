@@ -15,3 +15,8 @@ class TrackingLink(BaseModel):
 
     affiliate = relationship("Affiliate")
     offer = relationship("Offer")
+
+    @property
+    def url(self):
+        from app.core.config import settings
+        return f"{settings.TRACKING_BASE_URL}/c/{self.tracking_code}"

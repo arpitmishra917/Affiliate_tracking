@@ -31,23 +31,66 @@ def get_tracking_links(db: Session = Depends(get_db), current_user: User = Depen
 
 @router.post("", response_model=TrackingLinkResponse, status_code=status.HTTP_201_CREATED)
 def create_tracking_link(req: TrackingLinkCreateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
-    if current_user.role != RoleEnum.AFFILIATE:
-        raise HTTPException(status_code=403, detail="Only affiliates can create tracking links")
+    if current_user.role not in [RoleEnum.AFFILIATE, RoleEnum.MANAGER]:
+        raise HTTPException(status_code=403, detail="Only affiliates and managers can create tracking links")
         
     aff = db.query(Affiliate).filter(Affiliate.user_id == current_user.id).first()
-    if not aff or aff.status != StatusEnum.ACTIVE:
-        raise HTTPException(status_code=400, detail="Affiliate not active")
-        
+    
+    if current_user.role == RoleEnum.MANAGER:
+        if not aff:
+            # Auto-create Affiliate profile for Manager
+            aff_code = "MGR-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            aff = Affiliate(
+                user_id=current_user.id,
+                manager_id=current_user.id, # Manager is their own manager
+                affiliate_code=aff_code,
+                status=StatusEnum.ACTIVE
+            )
+            db.add(aff)
+            db.commit()
+            db.refresh(aff)
+            
+        # For manager, check if they are assigned this offer in ManagerOffer
+        from app.models.offer import ManagerOffer
+        assigned_mgr = db.query(ManagerOffer).filter(
+            ManagerOffer.manager_id == current_user.id,
+            ManagerOffer.offer_id == req.offer_id
+        ).first()
+        if not assigned_mgr:
+            raise HTTPException(status_code=403, detail="Offer not assigned to you as a manager")
+            
+        # We must also ensure AffiliateOffer exists so tracking works correctly downstream
+        assigned_aff = db.query(AffiliateOffer).filter(
+            AffiliateOffer.affiliate_id == aff.id,
+            AffiliateOffer.offer_id == req.offer_id
+        ).first()
+        if not assigned_aff:
+            aff_off = AffiliateOffer(affiliate_id=aff.id, offer_id=req.offer_id)
+            db.add(aff_off)
+            db.commit()
+    else:
+        # Affiliate logic
+        if not aff or aff.status != StatusEnum.ACTIVE:
+            raise HTTPException(status_code=400, detail="Affiliate not active")
+            
+        assigned = db.query(AffiliateOffer).filter(
+            AffiliateOffer.affiliate_id == aff.id,
+            AffiliateOffer.offer_id == req.offer_id
+        ).first()
+        if not assigned:
+            raise HTTPException(status_code=403, detail="Offer not assigned to you")
+            
     off = db.query(Offer).filter(Offer.id == req.offer_id).first()
     if not off or off.status != StatusEnum.ACTIVE:
         raise HTTPException(status_code=400, detail="Offer not found or inactive")
         
-    assigned = db.query(AffiliateOffer).filter(
-        AffiliateOffer.affiliate_id == aff.id,
-        AffiliateOffer.offer_id == off.id
+    existing_link = db.query(TrackingLink).filter(
+        TrackingLink.affiliate_id == aff.id,
+        TrackingLink.offer_id == off.id
     ).first()
-    if not assigned:
-        raise HTTPException(status_code=403, detail="Offer not assigned to you")
+    
+    if existing_link:
+        return existing_link
         
     code = generate_tracking_code()
     link = TrackingLink(
@@ -59,12 +102,6 @@ def create_tracking_link(req: TrackingLinkCreateRequest, db: Session = Depends(g
     db.commit()
     db.refresh(link)
     
-    url = f"{settings.TRACKING_BASE_URL}/c/{code}"
-    if req.sub_id:
-        url += f"?sub_id={req.sub_id}"
-        
-    # We add url to the response via a dynamic property
-    link.url = url
     return link
 
 @router.get("/{tracking_link_id}", response_model=TrackingLinkResponse)
@@ -83,9 +120,6 @@ def get_tracking_link(tracking_link_id: UUID, db: Session = Depends(get_db), cur
         if not aff or aff.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not your link")
             
-    url = f"{settings.TRACKING_BASE_URL}/c/{link.tracking_code}"
-    # Can't easily get sub_id back as it's not strictly stored in TrackingLink, it's generated dynamically
-    link.url = url
     return link
 
 @router.post("/{tracking_link_id}/deactivate", response_model=TrackingLinkResponse)
@@ -107,6 +141,4 @@ def deactivate_tracking_link(tracking_link_id: UUID, db: Session = Depends(get_d
     link.status = StatusEnum.INACTIVE
     db.commit()
     db.refresh(link)
-    url = f"{settings.TRACKING_BASE_URL}/c/{link.tracking_code}"
-    link.url = url
     return link

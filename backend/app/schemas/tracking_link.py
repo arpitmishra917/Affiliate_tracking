@@ -8,7 +8,7 @@ class TrackingLinkBase(BaseModel):
     offer_id: UUID
 
 class TrackingLinkCreateRequest(TrackingLinkBase):
-    sub_id: Optional[str] = None
+    pass
 
 class TrackingLinkResponse(BaseModel):
     id: UUID

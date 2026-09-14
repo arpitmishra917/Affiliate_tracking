@@ -11,20 +11,23 @@ function AffiliatesContent() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const managerId = searchParams.get("manager_id");
+  const [filterManagerId, setFilterManagerId] = useState<string>(managerId || "");
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ name: "", email: "", phone: "", address: "", password: "", manager_id: "" });
   const [managers, setManagers] = useState<any[]>([]);
 
   useEffect(() => {
     let url = "/affiliates";
-    if (managerId) url += `?manager_id=${managerId}`;
+    if (filterManagerId && filterManagerId !== "ALL") {
+      url += `?manager_id=${filterManagerId}`;
+    }
     fetchApi(url).then(setAffiliates).catch(console.error);
     if (user?.role === "ADMIN") {
       fetchApi("/users").then(data => {
         setManagers(data.filter((u: any) => u.role === "MANAGER"));
       }).catch(console.error);
     }
-  }, [user, managerId]);
+  }, [user, filterManagerId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +44,7 @@ function AffiliatesContent() {
       });
       setAffiliates([...affiliates, newAff]);
       setShowModal(false);
-      setFormData({ name: "", email: "", phone: "", manager_id: "" });
+      setFormData({ name: "", email: "", phone: "", address: "", password: "", manager_id: "" });
     } catch (err: any) {
       alert(err.message);
     }
@@ -51,14 +54,29 @@ function AffiliatesContent() {
     <>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold">Affiliates</h1>
-        {["ADMIN", "MANAGER"].includes(user?.role || "") && (
-          <button 
-            onClick={() => setShowModal(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded shadow-sm hover:bg-blue-700"
-          >
-            + New Affiliate
-          </button>
-        )}
+        <div className="flex items-center space-x-4">
+          {user?.role === "ADMIN" && (
+            <select 
+              className="border p-2 rounded shadow-sm bg-white"
+              value={filterManagerId}
+              onChange={e => setFilterManagerId(e.target.value)}
+            >
+              <option value="ALL">All Affiliates</option>
+              <option value={user.id}>My Affiliates (Self)</option>
+              {managers.map(m => (
+                <option key={m.id} value={m.id}>{m.name}'s Affiliates</option>
+              ))}
+            </select>
+          )}
+          {["ADMIN", "MANAGER"].includes(user?.role || "") && (
+            <button 
+              onClick={() => setShowModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded shadow-sm hover:bg-blue-700"
+            >
+              + New Affiliate
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">

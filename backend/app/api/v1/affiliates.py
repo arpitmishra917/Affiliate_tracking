@@ -151,15 +151,29 @@ def deactivate_affiliate(affiliate_id: UUID, db: Session = Depends(get_db), curr
     db.refresh(aff)
     return aff
 
+from app.api.deps import get_current_user, get_current_active_user, get_current_active_admin, get_current_active_admin_or_manager
+
 @router.post("/{affiliate_id}/offers/{offer_id}")
-def assign_offer(affiliate_id: UUID, offer_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_admin)):
+def assign_offer(affiliate_id: UUID, offer_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_admin_or_manager)):
     aff = db.query(Affiliate).filter(Affiliate.id == affiliate_id).first()
     if not aff:
         raise HTTPException(status_code=404, detail="Affiliate not found")
+    if current_user.role == RoleEnum.MANAGER and aff.manager_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not your affiliate")
+        
     off = db.query(Offer).filter(Offer.id == offer_id).first()
     if not off:
         raise HTTPException(status_code=404, detail="Offer not found")
         
+    if current_user.role == RoleEnum.MANAGER:
+        from app.models.offer import ManagerOffer
+        assigned_mgr = db.query(ManagerOffer).filter(
+            ManagerOffer.manager_id == current_user.id,
+            ManagerOffer.offer_id == offer_id
+        ).first()
+        if not assigned_mgr:
+            raise HTTPException(status_code=403, detail="You must be assigned this offer before you can assign it to an affiliate")
+            
     existing = db.query(AffiliateOffer).filter(
         AffiliateOffer.affiliate_id == affiliate_id,
         AffiliateOffer.offer_id == offer_id
@@ -173,7 +187,13 @@ def assign_offer(affiliate_id: UUID, offer_id: UUID, db: Session = Depends(get_d
     return {"status": "assigned"}
 
 @router.delete("/{affiliate_id}/offers/{offer_id}")
-def remove_offer_assignment(affiliate_id: UUID, offer_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_admin)):
+def remove_offer_assignment(affiliate_id: UUID, offer_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_admin_or_manager)):
+    aff = db.query(Affiliate).filter(Affiliate.id == affiliate_id).first()
+    if not aff:
+        raise HTTPException(status_code=404, detail="Affiliate not found")
+    if current_user.role == RoleEnum.MANAGER and aff.manager_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not your affiliate")
+
     existing = db.query(AffiliateOffer).filter(
         AffiliateOffer.affiliate_id == affiliate_id,
         AffiliateOffer.offer_id == offer_id

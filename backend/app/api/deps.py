@@ -42,6 +42,11 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
     return current_user
 
 def get_current_active_admin(current_user: User = Depends(get_current_active_user)) -> User:
-    if current_user.role != RoleEnum.ADMIN:
+    if current_user.role not in [RoleEnum.ADMIN, RoleEnum.ADMIN.value]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    return current_user
+
+def get_current_active_admin_or_manager(current_user: User = Depends(get_current_active_user)) -> User:
+    if current_user.role not in [RoleEnum.ADMIN, RoleEnum.ADMIN.value, RoleEnum.MANAGER, RoleEnum.MANAGER.value]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     return current_user

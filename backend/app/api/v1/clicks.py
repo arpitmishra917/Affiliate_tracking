@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.models.click import Click
 from app.models.affiliate import Affiliate
 from app.models.user import User, RoleEnum
-from app.schemas.click import ClickResponse
+from app.schemas.click import ClickResponse, ClickPaginatedResponse
 from app.api.deps import get_current_active_user
 
 router = APIRouter()
@@ -25,7 +25,7 @@ def get_click_stats(db: Session = Depends(get_db), current_user: User = Depends(
         
     return {"total_clicks": total_clicks}
 
-@router.get("", response_model=dict)
+@router.get("", response_model=ClickPaginatedResponse)
 def get_clicks(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),

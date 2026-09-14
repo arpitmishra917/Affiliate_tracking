@@ -4,7 +4,7 @@ from typing import List
 from uuid import UUID
 
 from app.core.database import get_db
-from app.models.offer import Offer
+from app.models.offer import Offer, AffiliateOffer
 from app.models.user import User, RoleEnum, StatusEnum
 from app.schemas.offer import OfferResponse, OfferCreate, OfferUpdate
 from app.api.deps import get_current_user, get_current_active_user, get_current_active_admin
@@ -15,8 +15,11 @@ router = APIRouter()
 def get_offers(db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     if current_user.role == RoleEnum.ADMIN:
         return db.query(Offer).all()
+    if current_user.role == RoleEnum.MANAGER:
+        from app.models.offer import ManagerOffer
+        return db.query(Offer).join(ManagerOffer).filter(ManagerOffer.manager_id == current_user.id).all()
     if current_user.role == RoleEnum.AFFILIATE:
-        from app.models.affiliate import Affiliate, AffiliateOffer
+        from app.models.affiliate import Affiliate
         aff = db.query(Affiliate).filter(Affiliate.user_id == current_user.id).first()
         if not aff:
             return []
@@ -25,7 +28,7 @@ def get_offers(db: Session = Depends(get_db), current_user: User = Depends(get_c
             Offer.status == StatusEnum.ACTIVE
         ).all()
         return offers
-    return db.query(Offer).all()
+    return []
 
 @router.post("", response_model=OfferResponse, status_code=status.HTTP_201_CREATED)
 def create_offer(offer_in: OfferCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_admin)):

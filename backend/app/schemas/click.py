@@ -20,3 +20,12 @@ class ClickResponse(ClickBase):
 
     class Config:
         from_attributes = True
+
+class ClickPagination(BaseModel):
+    page: int
+    page_size: int
+    total: int
+
+class ClickPaginatedResponse(BaseModel):
+    data: list[ClickResponse]
+    pagination: ClickPagination

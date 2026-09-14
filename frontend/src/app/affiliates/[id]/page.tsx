@@ -32,7 +32,7 @@ export default function AffiliateDetailsPage() {
 
     fetchApi(`/affiliates/${id}/offers`).then(setAssignedOffers).catch(console.error);
     
-    if (user?.role === "ADMIN") {
+    if (["ADMIN", "MANAGER"].includes(user?.role || "")) {
       fetchApi("/offers").then(setOffers).catch(console.error);
     }
   };
@@ -135,7 +135,7 @@ export default function AffiliateDetailsPage() {
           {assignedOffers.length === 0 && <p className="text-sm text-gray-500">No offers assigned yet.</p>}
         </ul>
 
-        {user?.role === "ADMIN" && (
+        {["ADMIN", "MANAGER"].includes(user?.role || "") && (
           <form onSubmit={handleAssignOffer} className="flex gap-2">
             <select required className="flex-1 border p-2 rounded" value={selectedOfferId} onChange={e => setSelectedOfferId(e.target.value)}>
               <option value="">Select an offer to assign...</option>
